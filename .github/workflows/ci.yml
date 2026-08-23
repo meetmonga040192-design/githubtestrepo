@@ -1,0 +1,141 @@
+name: Terraform CI
+
+on:
+  push:
+    branches:
+      - feature
+      - "feature/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+
+  terraform-ci:
+
+    name: Terraform CI
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ==========================================
+      # 1. CHECKOUT CODE
+      # ==========================================
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # 2. AZURE LOGIN
+      # ==========================================
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: 6656127f-84b1-4863-8607-48501595f57a
+          tenant-id: "4b9cff3a-07ab-4d9d-945d-df704d1808d4"
+          subscription-id: "32befec2-21d4-498b-a715-32aa460c0a9d"
+
+
+      # ==========================================
+      # 3. SECURITY SCAN
+      # ==========================================
+      - name: Install Checkov
+        run: pip install checkov
+
+      - name: Terraform Security Scan
+        run: checkov -d .
+
+
+      # ==========================================
+      # 4. SETUP TERRAFORM
+      # ==========================================
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ==========================================
+      # 5. TERRAFORM INIT
+      # ==========================================
+      - name: Terraform Init
+        run: terraform init
+
+
+      # ==========================================
+      # 6. TERRAFORM FORMAT CHECK
+      # ==========================================
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+
+      # ==========================================
+      # 7. TERRAFORM VALIDATE
+      # ==========================================
+      - name: Terraform Validate
+        run: terraform validate
+
+
+      # ==========================================
+      # 8. TERRAFORM PLAN
+      # ==========================================
+      - name: Terraform Plan
+        run: terraform plan
+
+
+  # ==========================================
+  # 9. CREATE PR AFTER CI SUCCESS
+  # ==========================================
+  create-pr:
+
+    name: Create Pull Request
+    needs: terraform-ci
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+
+          BRANCH="${GITHUB_REF_NAME}"
+
+          echo "Current branch: $BRANCH"
+
+          EXISTING_PR=$(gh pr list \
+            --head "$BRANCH" \
+            --base main \
+            --state open \
+            --json number \
+            --jq 'length')
+
+          if [ "$EXISTING_PR" -eq 0 ]; then
+
+            echo "No existing PR found."
+            echo "Creating Pull Request..."
+
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Merge $BRANCH into main" \
+              --body "## Terraform CI Passed
+
+              The following CI checks have passed:
+
+              - Security Scan
+              - Terraform Init
+              - Terraform Format
+              - Terraform Validate
+              - Terraform Plan
+
+              Please review and approve this Pull Request."
+
+          else
+
+            echo "Pull Request already exists."
+            echo "Skipping PR creation."
+
+          fi
