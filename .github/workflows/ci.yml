@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
 
@@ -24,6 +25,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+
+      # ==========================================
+      # 2. AZURE LOGIN
+      # ==========================================
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: 6656127f-84b1-4863-8607-48501595f57a
+          tenant-id: "4b9cff3a-07ab-4d9d-945d-df704d1808d4"
+          subscription-id: "32befec2-21d4-498b-a715-32aa460c0a9d"
 
       # ==========================================
       # 3. SECURITY SCAN
